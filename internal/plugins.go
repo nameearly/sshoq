@@ -38,7 +38,8 @@ func (r *pluginsRegistry[T]) registerPlugin(name string, plugin T) error {
 func (r *pluginsRegistry[T]) closeRegistry() {
 	r.registerMutex.Lock()
 	defer r.registerMutex.Unlock()
-	serverRegistry.registrationsOpen = false
+	// Fix: close the registry instance we were called on (previously this always closed serverRegistry).
+	r.registrationsOpen = false
 }
 
 var (
@@ -67,6 +68,8 @@ func newPluginsRegistry[T any]() *pluginsRegistry[T] {
 
 func FindIdentitiesFromAuthorizedIdentityString(username string, authorizedIdentityString string) (identities []auth.RequestIdentityVerifier) {
 	serverRegistry.registerMutex.RLock()
+	// Fix: ensure we release the read lock; otherwise subsequent plugin (un)registration may deadlock.
+	defer serverRegistry.registerMutex.RUnlock()
 	for name, parseIdentityPlugin := range serverRegistry.plugins {
 		identity, err := parseIdentityPlugin(username, authorizedIdentityString)
 		if err != nil {
